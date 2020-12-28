@@ -12,18 +12,18 @@ public class CharacterController : MonoBehaviour
     private float maxJumpVelocity, minJumpVelocity, acceleration, targetVelocity;
     private bool facingRight = true;
 
+    public Transform glue;
+
     [HideInInspector]
     public MovementVariables movementVariables;
 
     [Header("Events")]
     [Space]
-
-    public UnityEvent OnLandEvent;
+    public BoolEvent OnLandEvent;
+    public BoolEvent OnJumpEvent;
 
     [System.Serializable]
     public class BoolEvent : UnityEvent<bool> { }
-
-    public BoolEvent OnJumpEvent;
 
     private void Awake()
     {
@@ -31,10 +31,13 @@ public class CharacterController : MonoBehaviour
         playerCollisions.collisionInfo.Reset();
 
         if (OnLandEvent == null)
-            OnLandEvent = new UnityEvent();
+            OnLandEvent = new BoolEvent();
 
-        if (OnJumpEvent == null)
+        if (OnJumpEvent == null) { }
             OnJumpEvent = new BoolEvent();
+
+        OnLandEvent.AddListener(Landed);
+        OnJumpEvent.AddListener(Jumped);
     }
 
     private void FixedUpdate()
@@ -67,22 +70,31 @@ public class CharacterController : MonoBehaviour
         // If the player should jump...
         if (playerCollisions.collisionInfo.below && movementVariables.Jump)
         {
+            OnJumpEvent.Invoke();
+
             // Add a vertical force to the player.
-            movementVariables.Velocity.y = 5f;
+            // movementVariables.Velocity.y = 5f;
         }
 
         //Debug.Log(playerCollisions.collisionInfo.below);
         if (playerCollisions.collisionInfo.below)
         {
+            OnLandEvent.Invoke();
+
             movementVariables.Velocity.y = 0;
-            
+            var lineCollision = playerCollisions.LineCollistion();
+
+            if (lineCollision)
+            {
+                transform.position = new Vector2(transform.position.x, lineCollision.point.y + 0.3f);
+                transform.rotation = Quaternion.LookRotation(transform.forward, lineCollision.normal);
+            }
         }
         else
         {
             movementVariables.Velocity.y += movementVariables.Gravity * Time.deltaTime;
         }
     }
-
 
     private void Flip()
     {
@@ -95,5 +107,15 @@ public class CharacterController : MonoBehaviour
         Vector3 theScale = transform.localScale;
         theScale.x *= -1;
         transform.localScale = theScale;
+    }
+
+    private void Landed()
+    {
+        Debug.Log("Player has landed!");
+    }
+
+    private void Jumped()
+    {
+        Debug.Log("Player has jumped!");
     }
 }

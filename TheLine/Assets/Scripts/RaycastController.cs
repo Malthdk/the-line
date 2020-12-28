@@ -3,7 +3,7 @@
 [RequireComponent(typeof(BoxCollider2D))]
 public class RaycastController : MonoBehaviour
 {
-    public const float skinWidth = .015f;           //Small field within the character for the ray to start in
+    public const float skinWidth = 0.1f;           //Small field within the character for the ray to start in
     public int horizontalRayCount = 4;              //Number of horizontal rays
     public int verticalRayCount = 4;                //Number of Vertical rays
     public LayerMask collisionMask;
@@ -33,17 +33,22 @@ public class RaycastController : MonoBehaviour
     public void UpdateRaycastOrigins()
     {
         Bounds bounds = collider.bounds;
-        //bounds.Expand(skinWidth * -2);
+        bounds.Expand(skinWidth * -2);
 
-        raycastOrigins.bottomLeft = new Vector2(bounds.min.x, bounds.min.y);        //Setting bottom left corner origin as minium x and minimum y
-        raycastOrigins.bottomRight = new Vector2(bounds.max.x, bounds.min.y);       //Setting bottom right corner origin as maximum x and minimum y
-        raycastOrigins.topLeft = new Vector2(bounds.min.x, bounds.max.y);           //Setting top left corner origin as minimum x and maximum y
-        raycastOrigins.topRight = new Vector2(bounds.max.x, bounds.max.y);          //Setting top right corner origin as maximum x and maximum y
+        var offset = collider.offset;
+        var extents = collider.size * 0.5f;
+
+        raycastOrigins.bottomLeft = transform.TransformPoint(new Vector2(-extents.x, -extents.y) + offset);        //Setting bottom left corner origin as minium x and minimum y
+        raycastOrigins.bottomRight = transform.TransformPoint(new Vector2(extents.x, -extents.y) + offset);       //Setting bottom right corner origin as maximum x and minimum y
+        raycastOrigins.topLeft = transform.TransformPoint(new Vector2(extents.x, extents.y) + offset);           //Setting top left corner origin as minimum x and maximum y
+        raycastOrigins.topRight = transform.TransformPoint(new Vector2(-extents.x, extents.y) + offset);          //Setting top right corner origin as maximum x and maximum y
 
         raycastOrigins.bottom = new Vector2(bounds.center.x, bounds.min.y);        
         raycastOrigins.top = new Vector2(bounds.center.x, bounds.max.y);       
         raycastOrigins.left = new Vector2(bounds.min.x, bounds.center.y);           
-        raycastOrigins.topRight = new Vector2(bounds.max.x, bounds.center.y);          
+        raycastOrigins.topRight = new Vector2(bounds.max.x, bounds.center.y);
+
+        raycastOrigins.center = new Vector2(bounds.center.x, bounds.center.y);
     }
 
     //SPACE BETWEEN RAYS
@@ -63,8 +68,7 @@ public class RaycastController : MonoBehaviour
     {
         public Vector2 topLeft, topRight;
         public Vector2 bottomLeft, bottomRight;
-        public Vector2 top, bottom;
-        public Vector2 left, right;
+        public Vector2 top, bottom, left, right, center;
     }
 
     public struct CollisionInfo
