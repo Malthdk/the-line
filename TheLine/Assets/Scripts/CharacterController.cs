@@ -17,27 +17,11 @@ public class CharacterController : MonoBehaviour
     [HideInInspector]
     public MovementVariables movementVariables;
 
-    [Header("Events")]
-    [Space]
-    public BoolEvent OnLandEvent;
-    public BoolEvent OnJumpEvent;
-
-    [System.Serializable]
-    public class BoolEvent : UnityEvent<bool> { }
-
     private void Awake()
     {
         playerCollisions = GetComponentInChildren<PlayerCollisions>();
         playerCollisions.collisionInfo.Reset();
-
-        if (OnLandEvent == null)
-            OnLandEvent = new BoolEvent();
-
-        if (OnJumpEvent == null) { }
-            OnJumpEvent = new BoolEvent();
-
-        OnLandEvent.AddListener(Landed);
-        OnJumpEvent.AddListener(Jumped);
+        glue = transform.Find("Glue");
     }
 
     private void FixedUpdate()
@@ -64,36 +48,36 @@ public class CharacterController : MonoBehaviour
             Flip();
         }
 
-        playerCollisions.HorizontalCollisions(ref movementVariables.Velocity);
-        playerCollisions.VerticalCollisions(ref movementVariables.Velocity);
-
         // If the player should jump...
         if (playerCollisions.collisionInfo.below && movementVariables.Jump)
         {
-            OnJumpEvent.Invoke();
+            PlayerEvents.Instance.OnJumpEvent.Invoke();
 
             // Add a vertical force to the player.
-            // movementVariables.Velocity.y = 5f;
+            movementVariables.Velocity.y = 5f;
         }
 
-        //Debug.Log(playerCollisions.collisionInfo.below);
         if (playerCollisions.collisionInfo.below)
         {
-            OnLandEvent.Invoke();
-
             movementVariables.Velocity.y = 0;
-            var lineCollision = playerCollisions.LineCollistion();
-
-            if (lineCollision)
-            {
-                transform.position = new Vector2(transform.position.x, lineCollision.point.y + 0.3f);
-                transform.rotation = Quaternion.LookRotation(transform.forward, lineCollision.normal);
-            }
+            StickToLine();
         }
         else
         {
             movementVariables.Velocity.y += movementVariables.Gravity * Time.deltaTime;
         }
+    }
+
+    private void StickToLine()
+    {
+        var hit = playerCollisions.LineCollision();
+
+        if (hit)
+        {
+            transform.localRotation = Quaternion.LookRotation(transform.forward, hit.normal);
+            transform.localPosition = new Vector3(transform.localPosition.x, hit.point.y, transform.localPosition.z);
+        }
+
     }
 
     private void Flip()
@@ -107,15 +91,5 @@ public class CharacterController : MonoBehaviour
         Vector3 theScale = transform.localScale;
         theScale.x *= -1;
         transform.localScale = theScale;
-    }
-
-    private void Landed()
-    {
-        Debug.Log("Player has landed!");
-    }
-
-    private void Jumped()
-    {
-        Debug.Log("Player has jumped!");
     }
 }

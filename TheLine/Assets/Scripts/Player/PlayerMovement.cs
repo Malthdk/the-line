@@ -33,6 +33,5 @@ public class PlayerMovement : MonoBehaviour
     public void FixedUpdate()
     {
         controller.Move(playerInput);
-        controller.movementVariables.Jump = false;
     }
 }
