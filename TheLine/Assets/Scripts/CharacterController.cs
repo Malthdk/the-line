@@ -3,27 +3,29 @@ using UnityEngine.Events;
 
 public class CharacterController : MonoBehaviour
 {
-    [SerializeField] private float jumpForce = 400f;                          // Amount of force added when the player jumps.
-    [Range(0, .3f)] [SerializeField] private float movementSmoothing = .05f;  // How much to smooth out the movement
-    [Range(0, .2f)] [SerializeField] private float moveSpeed = .05f;        
-
-    private PlayerCollisions playerCollisions;
-
-    private float maxJumpVelocity, minJumpVelocity, acceleration, targetVelocity;
-    private bool facingRight = true;
-
-    public Transform glue;
-
-    [HideInInspector]
-    public MovementVariables movementVariables;
+    
+    [Header("Movement variables")]
+    [Space]
+    [Range(0, .3f)] public float movementSmoothing = .05f;  // How much to smooth out the movement
+    [Range(0, .2f)] public float moveSpeed = .05f;
+    public float acceleration = 2f;
+    public float maxJumpHeight = 3.5f;              //Max JumpHeight
+    public float minJumpHeight = 1f;
+    public float timeToJumpApex = .65f;
+    public float gravity;
+    public float velocitySmoothing;
+    public Vector2 velocity;
+    private float maxJumpVelocity, minJumpVelocity, targetVelocity;
 
     [Header("Events")]
     [Space]
-    public BoolEvent OnLandEvent;
-    public BoolEvent OnJumpEvent;
+    public UnityEvent OnLandEvent;
+    public UnityEvent OnJumpEvent;
 
-    [System.Serializable]
-    public class BoolEvent : UnityEvent<bool> { }
+    private PlayerCollisions playerCollisions;
+    private bool facingRight = true;
+    private bool hasLanded = false;
+
 
     private void Awake()
     {
@@ -31,10 +33,10 @@ public class CharacterController : MonoBehaviour
         playerCollisions.collisionInfo.Reset();
 
         if (OnLandEvent == null)
-            OnLandEvent = new BoolEvent();
+            OnLandEvent = new UnityEvent();
 
-        if (OnJumpEvent == null) { }
-            OnJumpEvent = new BoolEvent();
+        if (OnJumpEvent == null)
+            OnJumpEvent = new UnityEvent();
 
         OnLandEvent.AddListener(Landed);
         OnJumpEvent.AddListener(Jumped);
@@ -42,19 +44,58 @@ public class CharacterController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        movementVariables.Gravity = -(1 * 0.5f) / Mathf.Pow(0.65f, 1);
+        if (!playerCollisions.collisionInfo.IsCollidingWithLine)
+        {
+            gravity =  -(2 * maxJumpHeight) / Mathf.Pow(timeToJumpApex, 2);
+            //movementVariables.Gravity = -(1 * 0.5f) / Mathf.Pow(0.65f, 1);
+        }
     }
 
-    public void Move(Vector2 playerInput)
+    public void Move(Vector2 playerInput, bool isJumping)
     {
-        acceleration = (playerInput.x == 1 || playerInput.x == -1) ? movementVariables.Acceleration : (movementVariables.Acceleration / 5f);
-        targetVelocity = playerInput.x * moveSpeed;
-        movementVariables.Velocity.x = Mathf.SmoothDamp(movementVariables.Velocity.x, targetVelocity, ref movementVariables.VelocitySmoothing, acceleration);
-
-        transform.Translate(movementVariables.Velocity);
-
         playerCollisions.UpdateRaycastOrigins();
+        playerCollisions.collisionInfo.VelocityOld = velocity;
 
+        acceleration = (playerInput.x == 1 || playerInput.x == -1) ? acceleration : (acceleration / 5f);
+        targetVelocity = playerInput.x * moveSpeed;
+        velocity.x = Mathf.SmoothDamp(velocity.x, targetVelocity, ref velocitySmoothing, acceleration);
+        velocity.y += gravity * Time.deltaTime;
+
+        maxJumpVelocity = Mathf.Abs(gravity) * timeToJumpApex;              //Max jump velocity defined based on gravity and time to reach highest point
+        minJumpVelocity = Mathf.Sqrt(2 * Mathf.Abs(gravity) * minJumpHeight);   //Min jump velocity defined based on gravity and min jump height
+
+        ChangePlayerDirection(playerInput);
+
+        playerCollisions.HorizontalCollisions(ref velocity);
+        playerCollisions.VerticalCollisions(ref velocity);
+
+        // If the player should jump...
+        if (playerCollisions.collisionInfo.IsCollidingWithLine && isJumping)
+        {
+            Debug.Log("JUMPING!");
+            OnJumpEvent.Invoke();
+        }
+
+        if (playerCollisions.collisionInfo.IsCollidingWithLine)
+        {
+            if (!hasLanded)
+            {
+                OnLandEvent.Invoke();
+            }
+
+            transform.position = new Vector2(transform.position.x, playerCollisions.collisionInfo.LineCollisionPosition.y);
+            transform.rotation = Quaternion.LookRotation(transform.forward, playerCollisions.collisionInfo.LineCollisionNormal);
+
+            velocity.y = 0;
+        }
+
+
+
+        transform.Translate(velocity);
+    }
+
+    private void ChangePlayerDirection(Vector2 playerInput)
+    {
         if (playerInput.x > 0 && !facingRight)
         {
             Flip();
@@ -63,37 +104,6 @@ public class CharacterController : MonoBehaviour
         {
             Flip();
         }
-
-        playerCollisions.HorizontalCollisions(ref movementVariables.Velocity);
-        playerCollisions.VerticalCollisions(ref movementVariables.Velocity);
-
-        // If the player should jump...
-        if (playerCollisions.collisionInfo.below && movementVariables.Jump)
-        {
-            OnJumpEvent.Invoke();
-
-            // Add a vertical force to the player.
-            // movementVariables.Velocity.y = 5f;
-        }
-
-        //Debug.Log(playerCollisions.collisionInfo.below);
-        if (playerCollisions.collisionInfo.below)
-        {
-            OnLandEvent.Invoke();
-
-            movementVariables.Velocity.y = 0;
-            var lineCollision = playerCollisions.LineCollistion();
-
-            if (lineCollision)
-            {
-                transform.position = new Vector2(transform.position.x, lineCollision.point.y + 0.3f);
-                transform.rotation = Quaternion.LookRotation(transform.forward, lineCollision.normal);
-            }
-        }
-        else
-        {
-            movementVariables.Velocity.y += movementVariables.Gravity * Time.deltaTime;
-        }
     }
 
     private void Flip()
@@ -101,7 +111,7 @@ public class CharacterController : MonoBehaviour
         // Switch the way the player is labelled as facing.
         facingRight = !facingRight;
 
-        playerCollisions.collisionInfo.faceDirection = facingRight ? 1 : -1;
+        playerCollisions.collisionInfo.FaceDirection = facingRight ? 1 : -1;
 
         // Multiply the player's x local scale by -1.
         Vector3 theScale = transform.localScale;
@@ -111,11 +121,15 @@ public class CharacterController : MonoBehaviour
 
     private void Landed()
     {
+        transform.position = new Vector2(transform.position.x, playerCollisions.collisionInfo.LineCollisionPosition.y);
+        hasLanded = true;
         Debug.Log("Player has landed!");
     }
 
     private void Jumped()
     {
-        Debug.Log("Player has jumped!");
+        playerCollisions.collisionInfo.IsCollidingWithLine = false;
+        hasLanded = false;
+        velocity.y = minJumpVelocity;
     }
 }
